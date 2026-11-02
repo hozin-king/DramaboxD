@@ -1,0 +1,38 @@
+name: dracin-sync
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dracin-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DRACIN_DELAY_MS: "1000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: node scripts/collect.mjs
+      - name: Sync payload to hozinking.my.id
+        run: |
+          node -e "const p=require('./dracin-payload.json'); console.log('titles:', p.titles.length); for (const [k, v] of Object.entries(p.providers)) console.log(k + ': ' + v.status + ' titles=' + v.titles);"
+          SYNC_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://hozinking.my.id/api/dracin/sync -H "Authorization: Bearer ${{ secrets.DRACIN_SYNC_KEY }}" -H "Content-Type: application/json" --data-binary @dracin-payload.json) || { echo "::error::sync POST failed (curl error)"; exit 1; }
+          if [ "$SYNC_CODE" -ge 200 ] && [ "$SYNC_CODE" -lt 300 ]; then
+            echo "sync OK: HTTP $SYNC_CODE"
+          else
+            echo "::error::sync POST failed: HTTP $SYNC_CODE"
+            exit 1
+          fi

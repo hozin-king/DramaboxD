@@ -129,6 +129,32 @@ GET {base}/dramabox/get-allepisode?bookId=<id>
 
 Provider di sini mengikuti kontrak yang sama, lalu menormalisasi respons (toleran terhadap bungkus `data`, daftar `chapterList`, dan varian stream `m3u8Url`/`mp4`/`cdnList[].videoPathList[]` — utamakan `.m3u8` default). Episode terkunci/tanpa stream **tidak ditulis diam-diam**: dilewati dan dicatat di laporan scrape.
 
+## Sinkronisasi Dracin (workflow terjadwal)
+
+`.github/workflows/dracin-sync.yml` jalan tiap 6 jam (cron `0 */6 * * *`, plus
+`workflow_dispatch` manual): checkout → Node 24 → `npm install` → `npm run build`
+→ `node scripts/collect.mjs` → POST `dracin-payload.json` ke
+`https://hozinking.my.id/api/dracin/sync`. Kolektor memakai CLI yang sudah
+di-build (`dist/cli.js`) per provider+seed, mengambil TOP 3 hasil per seed,
+lalu detail + episode untuk judul-judul itu.
+
+- **Secret:** buat `DRACIN_SYNC_KEY` di repo Settings → Secrets and variables →
+  Actions (nama saja yang dicantumkan di sini; nilainya tidak pernah ditulis di
+  repo). Workflow memakainya hanya sebagai header
+  `Authorization: Bearer ${{ secrets.DRACIN_SYNC_KEY }}` dan tidak pernah
+  mencetaknya maupun isi payload.
+- **Seeds:** kolektor mencoba `GET https://hozinking.my.id/api/dracin/seeds`
+  dulu; bila gagal, fallback ke `dracin-seeds.json` di root repo (fail-soft,
+  dicatat di log). Satu provider gagal tidak menggagalkan provider lain;
+  status per provider tercatat di payload.
+- **Batas v1:** episode hanya diambil untuk `melolo` + `freereels`; provider
+  lain (bila ditambahkan ke seeds) hanya metadata search. Payload TIDAK berisi
+  URL stream apa pun — per judul hanya metadata + episode
+  `{idx, item_id, duration_s, locked}`; field `m3u8`/`mp4`/`main_url`/stream
+  dibuang eksplisit sebelum file ditulis. `dracin-payload.json` di-gitignore.
+- **Dry-run lokal:** `node scripts/collect.mjs --dry-run` (hanya provider +
+  seed pertama, tanpa POST sync — kolektor sendiri tidak pernah POST).
+
 ## Referensi
 
 Riset lengkap: `~/workspace/your_files/DracinScraper-Referensi.md` (Sansekai/SekaiDrama, RamzzzMD/pinedrama, akmaldira/dramabox-downloader, peta API hosted DramaBos/anichin).

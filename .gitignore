@@ -5,6 +5,7 @@ dist/
 
 # Hasil scrape (dibuat ulang oleh CLI)
 output/
+dracin-payload.json
 
 # Rahasia lokal
 .env
